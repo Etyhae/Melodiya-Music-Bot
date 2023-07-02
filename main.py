@@ -35,12 +35,12 @@ async def on_ready():
     
 
 @bot.command()
-async def play(ctx, *args, skipIs = False):
+async def play(ctx, *args):
     global loopIs
     global QUEUE
     global opts
     loopIs = loopIs
-    QUEUE = QUEUE
+    #QUEUE = QUEUE
     arguments = ', '.join(args)
     user = ctx.author
     channel = user.voice.channel
@@ -48,60 +48,84 @@ async def play(ctx, *args, skipIs = False):
 
 
     async def firstplay():
-        if voice == None:
-                QUEUE.append(song_search(arguments, True))
-                voice_channel = user.voice.channel
-                if voice_channel != None:
-                    vc = await channel.connect(self_deaf=True)
-                    vc.play(discord.FFmpegPCMAudio(**opts))
-                    await ctx.send(f"Сейчас играет - {QUEUE[0]['name']} : {QUEUE[0]['author']}")
-                while voice.is_playing():
-                    await asyncio.sleep(1)
+        QUEUE.append(song_search(arguments, True))
+        voice_channel = user.voice.channel
+        if voice_channel != None: #
+            vc = await channel.connect(self_deaf=True)
+            vc.play(discord.FFmpegPCMAudio(**opts))
+            await ctx.send(f"Сейчас играет - {QUEUE[0]['name']} : {QUEUE[0]['author']}")
+            while vc.is_playing():
+                await asyncio.sleep(1)
+            else:
                 if loopIs:
                     await play(ctx)
-                if len(QUEUE) > 1:
+                if QUEUE: #
                     del QUEUE[0]
                     await play(ctx)
                 else:
                     await ctx.send("Плейлист пуст11")
-
-    async def repeatplay():
-        if len(QUEUE) == 0:
-            pass
         else:
-            voice.stop()
-            song_search(QUEUE[0]['name'] + " " + QUEUE[0]['author'], True)
-            voice.play(discord.FFmpegPCMAudio(**opts))
-            if loopIs:
-                await play(ctx)
-            else:
-                await ctx.send(f"Сейчас играет - {QUEUE[0]['name']} : {QUEUE[0]['author']}")
-            while voice.is_playing():
-                await asyncio.sleep(1)
-            if len(QUEUE) > 1:
+            await ctx.send("Вы не находитесь в голосовом канале")
+
+    async def playsong():
+        QUEUE.append(song_search(arguments, True))
+        voice.stop()
+        song_search(QUEUE[0]['name'] + " " + QUEUE[0]['author'], True)
+        voice.play(discord.FFmpegPCMAudio(**opts))
+        if loopIs:
+            await play(ctx)
+        else:
+            await ctx.send(f"Сейчас играет - {QUEUE[0]['name']} : {QUEUE[0]['author']}")
+        while voice.is_playing():
+            await asyncio.sleep(1)
+        else:
+            if QUEUE:
                 del QUEUE[0]
                 await play(ctx)
-            else:
-                await ctx.send("Плейлист пуст5")
 
-
-    if args:
-        if not skipIs:
-            if len(QUEUE) == 0:
-                await firstplay()
-            else:
-                QUEUE.append(song_search(arguments, False))
-                await ctx.send(f"{QUEUE[-1]['name']} : {QUEUE[-1]['author']} - добавлено в очередь")
+    async def repeatplay():
+        voice.stop()
+        song_search(QUEUE[0]['name'] + " " + QUEUE[0]['author'], True)
+        voice.play(discord.FFmpegPCMAudio(**opts))
+        await ctx.send(f"Сейчас играет - {QUEUE[0]['name']} : {QUEUE[0]['author']}")
+        while voice.is_playing():
+            await asyncio.sleep(1)
         else:
-            await repeatplay()
-    else: #придумать как убрать повторения
+            if QUEUE:
+                if loopIs:
+                    await play(ctx)
+            else:
+                del QUEUE[0]
+                await play(ctx)
+
+
+
+    if args and voice is None:
+        await firstplay()
+    elif (args and voice) and not QUEUE:
+        await playsong()
+    elif args and QUEUE:
+        QUEUE.append(song_search(arguments, False))
+        await ctx.send(f"{QUEUE[-1]['name']} : {QUEUE[-1]['author']} - добавлено в очередь")
+    else:
         await repeatplay()
+    # if args:
+    #     if not skipIs:
+    #         if not QUEUE: #
+    #             await firstplay()
+    #         else:
+    #             QUEUE.append(song_search(arguments, False))
+    #             await ctx.send(f"{QUEUE[-1]['name']} : {QUEUE[-1]['author']} - добавлено в очередь")
+    #     else:
+    #         await repeatplay()
+    # else: #придумать как убрать повторения
+    #     await repeatplay()
 
 @bot.command()
 async def loop(ctx):
     global loopIs
     loopIs = not loopIs
-    if loopIs == True: 
+    if loopIs: #
         await ctx.send('Плейлист зациклен')
     else:
         await ctx.send('Плейлист по очереди')
@@ -155,11 +179,10 @@ async def skip(ctx):
     if(voice.is_connected()):
         if quantity > 1:
             del QUEUE[0]
-            await play(ctx, f"{QUEUE[0]['name']} {QUEUE[0]['author']}", skipIs=True)
+            await play(ctx)
         elif quantity == 1:
             del QUEUE[0]
             voice.stop()
-            await ctx.send('Плейлист пуст6')
         else:
             await ctx.send('Плейлист пуст4')
     else:
