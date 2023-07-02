@@ -63,7 +63,7 @@ async def play(ctx, *args):
                     del QUEUE[0]
                     await play(ctx)
                 else:
-                    await ctx.send("Плейлист пуст11")
+                    await ctx.send("Плейлист пуст")
         else:
             await ctx.send("Вы не находитесь в голосовом канале")
 
@@ -137,7 +137,7 @@ async def playlist(ctx):
     for x in QUEUE:
         playlist += f"{x['name']} : {x['author']}\n"
     if playlist == "":
-        await ctx.send("Плейлист пуст3")
+        await ctx.send("Плейлист пуст")
     else:
         await ctx.send(playlist)
 
@@ -184,7 +184,7 @@ async def skip(ctx):
             del QUEUE[0]
             voice.stop()
         else:
-            await ctx.send('Плейлист пуст4')
+            await ctx.send('Плейлист пуст')
     else:
         await ctx.send("Бот не в голосовом канале")
 
