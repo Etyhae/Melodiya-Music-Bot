@@ -7,52 +7,51 @@ import asyncio
 
 clientYM = Client(settings['YM_token']).init()
 
-# clientYM.users_likes_tracks()[0].fetch_track().download('first.mp3')
-
 intents = discord.Intents.default()
 intents.message_content = True
 
 bot = commands.Bot(command_prefix=settings['prefix'], intents=intents)
-QUEUE = []
-loopIs = False
-opts = {'executable' : r"C:/ffmpeg/bin/ffmpeg.exe", 'source' : rf"C:\Users\maxma\Desktop\Py\Disc\0.mp3"}
+queue = []
+isLoop = False
+opts = {'executable': r"C:/ffmpeg/bin/ffmpeg.exe", 'source': rf".\0.mp3"}
 
 
-def song_search(songName, DoN=True): #download or not - Chech means track name in folder
-    global QUEUE
+def song_search(songName, doDownload=True):
+    global queue
     search_result = clientYM.search(songName)
 
-    def findTrack():
+    def find_track():
         trackID = search_result['best']['result']['id']
         albumID = search_result['best']['result']['albums'][0]['id']
         trackFull = {trackID : albumID}
         trackLabel = {'name' : search_result['best']['result']['title'],
                     'author' : search_result['best']['result']['artists'][0]['name']}
-        QUEUE.append(trackLabel)
+        queue.append(trackLabel)
         return trackFull
     
-    def findPlaylist():
-        album = clientYM.users_playlists(search_result['best']['result']['kind'], search_result['best']['result']['uid'])
+    def find_playlist():
+        album = clientYM.users_playlists(search_result['best']['result']['kind'],
+                                         search_result['best']['result']['uid'])
         for tracks in album.tracks:
             if album.track_count > 1:
                 trackLabel = {'name' : tracks['track']['title'],
                                 'author': tracks['track']['artists'][0]['name']}
-                QUEUE.append(trackLabel)
+                queue.append(trackLabel)
     try:
         if search_result['best']['type'] == 'track':
-            if DoN is True:
-                clientYM.tracks([findTrack()])[0].download('0.mp3') 
+            if doDownload is True:
+                clientYM.tracks([find_track()])[0].download('0.mp3') 
             else:
-                findTrack()
+                find_track()
 
         elif search_result['best']['type'] == 'playlist':
-            findPlaylist()
-            songTitle = QUEUE[0]['name'] + " " + QUEUE[0]['author']
+            find_playlist()
+            songTitle = queue[0]['name'] + " " + queue[0]['author']
             search_result = clientYM.search(songTitle)
-            if DoN is True:
-                clientYM.tracks([findTrack()])[0].download('0.mp3')
+            if doDownload is True:
+                clientYM.tracks([find_track()])[0].download('0.mp3')
             else:
-                findTrack() # cut this part
+                find_track()
     except: # error as e
         pass
         # return e
@@ -64,81 +63,79 @@ async def on_ready():
 
 @bot.command()
 async def play(ctx, *args):
-    global loopIs
-    global QUEUE
+    global isLoop
+    global queue
     global opts
-    loopIs = loopIs
     arguments = ', '.join(args)
     user = ctx.author
-    channel = user.voice.channel # check if None
+    channel = user.voice.channel
     voice = discord.utils.get(bot.voice_clients, guild=ctx.guild)
 
 
-    async def firstplay():
+    async def first_play():
         song_search(arguments, True)
-        voice_channel = user.voice.channel
-        if voice_channel != None: #
+        voiceChannel = user.voice.channel
+        if voiceChannel != None: #
             vc = await channel.connect(self_deaf=True)
             vc.play(discord.FFmpegPCMAudio(**opts))
-            await ctx.send(f"Сейчас играет - {QUEUE[0]['name']} : {QUEUE[0]['author']}")
+            await ctx.send(f"Сейчас играет - {queue[0]['name']} : {queue[0]['author']}")
             while vc.is_playing():
                 await asyncio.sleep(1)
             else:
-                if loopIs:
+                if isLoop:
                     await play(ctx)
-                if QUEUE: #
-                    del QUEUE[0]
+                if queue: #
+                    del queue[0]
                     await play(ctx)
                 else:
                     await ctx.send("Плейлист пуст")
         else:
             await ctx.send("Вы не находитесь в голосовом канале")
 
-    async def repeatplay():
+    async def repeat_play():
         voice.stop()
-        song_search(QUEUE[0]['name'] + " " + QUEUE[0]['author'], True)
+        song_search(queue[0]['name'] + " " + queue[0]['author'], True)
         voice.play(discord.FFmpegPCMAudio(**opts))
-        await ctx.send(f"Сейчас играет - {QUEUE[0]['name']} : {QUEUE[0]['author']}")
+        await ctx.send(f"Сейчас играет - {queue[0]['name']} : {queue[0]['author']}")
         while voice.is_playing():
             await asyncio.sleep(1)
         else:
-            if QUEUE:
-                if loopIs:
+            if queue:
+                if isLoop:
                     await play(ctx)
             else:
-                del QUEUE[0]
+                del queue[0]
                 await play(ctx)
 
 
-
     if args and voice is None:
-        await firstplay()
-    elif (args and voice) and not QUEUE:
+        await first_play()
+    elif (args and voice) and not queue:
         song_search(arguments, True)
-        await repeatplay()
-    elif args and QUEUE:
+        await repeat_play()
+    elif args and queue:
         song_search(arguments, False)
-        await ctx.send(f"{QUEUE[-1]['name']} : {QUEUE[-1]['author']} - добавлено в очередь")
+        await ctx.send(f"{queue[-1]['name']} : {queue[-1]['author']} - добавлено в очередь")
     else:
-        await repeatplay()
+        await repeat_play()
 
 @bot.command()
 async def loop(ctx):
-    global loopIs
-    loopIs = not loopIs
-    if loopIs: #
+    global isLoop
+    isLoop = not isLoop
+    if isLoop: #
         await ctx.send('Плейлист зациклен')
     else:
         await ctx.send('Плейлист по очереди')
 
 @bot.command()
 async def playlist(ctx):
-    global QUEUE
+    global queue
     songPlaylist = ""
-    for x in QUEUE:
+    for x in queue:
         songPlaylist += f"{x['name']} : {x['author']}\n"
         if len(songPlaylist) > 600:
-            await ctx.send(songPlaylist + f"... и еще {len(QUEUE)-QUEUE.index(x)}")
+            await ctx.send(songPlaylist + f"... и еще {len(queue)-queue.index(x)}")
             break
     else:
         if not songPlaylist :
@@ -178,15 +175,15 @@ async def stop(ctx):
 
 @bot.command()
 async def skip(ctx):
-    global QUEUE
+    global queue
     voice = discord.utils.get(bot.voice_clients, guild=ctx.guild)
-    quantity = len(QUEUE)
+    quantity = len(queue)
     if(voice.is_connected()):
         if quantity > 1:
-            del QUEUE[0]
+            del queue[0]
             await play(ctx)
         elif quantity == 1:
-            del QUEUE[0]
+            del queue[0]
             voice.stop()
         else:
             await ctx.send('Плейлист пуст')
