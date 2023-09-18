@@ -4,7 +4,6 @@ from config import settings
 from yandex_music import Client
 import asyncio
 
-
 clientYM = Client(settings['YM_token']).init()
 
 intents = discord.Intents.default()
@@ -38,13 +37,15 @@ def song_search(songName, doDownload=True):
                                 'author': tracks['track']['artists'][0]['name']}
                 queue.append(trackLabel)
     try:
-        if search_result['best']['type'] == 'track':
+        result_type = search_result['best']['type']
+
+        if result_type == 'track':
             if doDownload is True:
                 clientYM.tracks([find_track()])[0].download('0.mp3') 
             else:
                 find_track()
 
-        elif search_result['best']['type'] == 'playlist':
+        elif result_type == 'playlist':
             find_playlist()
             songTitle = queue[0]['name'] + " " + queue[0]['author']
             search_result = clientYM.search(songTitle)
@@ -52,8 +53,10 @@ def song_search(songName, doDownload=True):
                 clientYM.tracks([find_track()])[0].download('0.mp3')
             else:
                 find_track()
-    except: # error as e
-        pass
+        else:
+            return False
+    except Exception as e: # error as e
+        print(e)
         # return e
 
 @bot.event
@@ -66,14 +69,12 @@ async def play(ctx, *args):
     global isLoop
     global queue
     global opts
-    arguments = ', '.join(args)
+    arguments = ','.join(args)
     user = ctx.author
     channel = user.voice.channel
     voice = discord.utils.get(bot.voice_clients, guild=ctx.guild)
 
-
     async def first_play():
-        song_search(arguments, True)
         voiceChannel = user.voice.channel
         if voiceChannel != None: #
             vc = await channel.connect(self_deaf=True)
@@ -82,9 +83,9 @@ async def play(ctx, *args):
             while vc.is_playing():
                 await asyncio.sleep(1)
             else:
-                if isLoop:
+                if queue and (isLoop is True):
                     await play(ctx)
-                if queue: #
+                elif queue and (isLoop is False):
                     del queue[0]
                     await play(ctx)
                 else:
@@ -94,30 +95,66 @@ async def play(ctx, *args):
 
     async def repeat_play():
         voice.stop()
-        song_search(queue[0]['name'] + " " + queue[0]['author'], True)
         voice.play(discord.FFmpegPCMAudio(**opts))
         await ctx.send(f"Сейчас играет - {queue[0]['name']} : {queue[0]['author']}")
         while voice.is_playing():
             await asyncio.sleep(1)
         else:
-            if queue:
-                if isLoop:
-                    await play(ctx)
-            else:
+            if queue and (isLoop is True):
+                await play(ctx)
+            elif queue and (isLoop is False):
                 del queue[0]
                 await play(ctx)
+            else:
+                await ctx.send("Плейлист пуст")
 
 
-    if args and voice is None:
-        await first_play()
-    elif (args and voice) and not queue:
-        song_search(arguments, True)
-        await repeat_play()
+    # if args and (voice is None):
+    #     await first_play()
+    # elif args and queue:
+    #     song_search(arguments, False)
+    #     await ctx.send(f"{queue[-1]['name']} : {queue[-1]['author']} - добавлено в очередь")
+    # elif not args:
+    #     song_search(queue[0]['name'] + " " + queue[0]['author'])
+    #     del queue[-1]
+    #     await repeat_play()
+    # else:
+    #     await ctx.send('Ошибка')
+    # # if args and voice is None:
+    # #    await first_play()
+    # # elif (args and voice) and not queue:
+    # #     song_search(arguments, True)
+    # #     await repeat_play()
+    # # elif not args:
+    # #     song_search(queue[0]['name'] + " " + queue[0]['author'])
+    # #     await repeat_play()
+    # # elif args and queue:
+    # #     song_search(arguments, False)
+    # #     await ctx.send(f"{queue[-1]['name']} : {queue[-1]['author']} - добавлено в очередь")
+    # # else:
+    # #     await ctx.send('Ошибка')
+
+    if args and (voice is None):
+        if song_search(arguments) is False:
+            await ctx.send('Песня/плейлист не найдены')
+        else:
+            await first_play()
+    elif (args and voice) and (not queue):
+        if song_search(arguments) is False:
+            await ctx.send('Песня/плейлист не найдены')
+        else:
+            await repeat_play()
     elif args and queue:
         song_search(arguments, False)
         await ctx.send(f"{queue[-1]['name']} : {queue[-1]['author']} - добавлено в очередь")
-    else:
+    elif not args and queue:
+        song_search(queue[0]['name'] + " " + queue[0]['author'])
+        del queue[-1]
         await repeat_play()
+    elif not args and not queue and voice:
+        await ctx.send('Плейлист пуст')
+    else:
+        await ctx.send('Ошибка')
 
 @bot.command()
 async def loop(ctx):
